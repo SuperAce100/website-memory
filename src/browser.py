@@ -17,7 +17,7 @@ class Browser:
         
         self.context = self.driver.new_context()
         self.active_page = None
-        self._element_selectors = {}  # Store element selectors for interaction
+        self._element_selectors = []  # List of (selector, click_location) tuples
 
     def open_url(self, url):
         page = self.context.new_page()
@@ -30,7 +30,13 @@ class Browser:
         """Click on an element specified by its index."""
         if index >= len(self._element_selectors):
             raise ValueError(f"No element found with index {index}")
-        self.active_page.click(self._element_selectors[index])
+        selector, click_location = self._element_selectors[index]
+        if click_location:
+            # Click at specific coordinates if available
+            self.active_page.mouse.click(click_location['x'], click_location['y'])
+        else:
+            # Fallback to selector click
+            self.active_page.click(selector)
         self.active_page.wait_for_load_state("networkidle")
         self.active_page.wait_for_timeout(1000)
 
@@ -38,7 +44,8 @@ class Browser:
         """Input text into an element specified by its index."""
         if index >= len(self._element_selectors):
             raise ValueError(f"No element found with index {index}")
-        self.active_page.fill(self._element_selectors[index], text)
+        selector, _ = self._element_selectors[index]
+        self.active_page.fill(selector, text)
         self.active_page.wait_for_timeout(random.randint(200, 1000))
         self.active_page.keyboard.press("Enter")
         self.active_page.wait_for_load_state("networkidle")
@@ -152,7 +159,11 @@ class Browser:
                         (element.tagName === "INPUT" || element.tagName === "TEXTAREA" || element.tagName === "SELECT") ||
                         (element.tagName === "BUTTON" || element.tagName === "A" || (element.onclick != null) || window.getComputedStyle(element).cursor == "hello") || (element.getAttribute('role') === 'button') || (element.getAttribute('tabindex') === '0') || (element.getAttribute('role') === 'link') || (element.getAttribute('role') === 'menuitem'),
                     area,
-                    rects
+                    rects,
+                    clickLocation: rects.length > 0 ? {
+                        x: rects[0].left + rects[0].width / 2,
+                        y: rects[0].top + rects[0].height / 2
+                    } : null
                 };
             }).filter(item =>
                 item.include && (item.area >= 20)
@@ -211,8 +222,8 @@ class Browser:
         js_script = js_script.replace("COLOR_FUNCTION", selected_function)
         rects, items_raw = self.active_page.evaluate(js_script)
         
-        # Store selectors for interaction
-        self._element_selectors = [item['element']['selector'] for item in items_raw]
+        # Store selectors and click locations for interaction
+        self._element_selectors = [(item['element']['selector'], item['clickLocation']) for item in items_raw]
 
         print(items_raw)
         return items_raw
