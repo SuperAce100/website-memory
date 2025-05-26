@@ -1,8 +1,14 @@
 import base64
 import json
 import os
+import time
+from pydantic import BaseModel
 from playwright.sync_api import sync_playwright
 from PIL import Image
+
+class BrowserState(BaseModel):
+    page_url: str
+    page_screenshot_base64: str
 
 class Browser:
     def __init__(self):
@@ -20,19 +26,25 @@ class Browser:
     
     def click(self, index: int):
         """Click on an element specified by its index."""
-        if index not in self._element_selectors:
+        if index >= len(self._element_selectors):
             raise ValueError(f"No element found with index {index}")
         self.active_page.click(self._element_selectors[index])
+        self.active_page.wait_for_load_state("networkidle")
+        self.active_page.wait_for_timeout(1000)
 
     def input_text(self, index: int, text: str):
         """Input text into an element specified by its index."""
-        if index not in self._element_selectors:
+        if index >= len(self._element_selectors):
             raise ValueError(f"No element found with index {index}")
         self.active_page.fill(self._element_selectors[index], text)
+        self.active_page.wait_for_load_state("networkidle")
+        self.active_page.wait_for_timeout(1000)
 
     def scroll(self, amount: int = 500):
         """Scroll the page by the specified amount."""
         self.active_page.evaluate(f"window.scrollBy(0, {amount})")
+        self.active_page.wait_for_load_state("networkidle")
+        self.active_page.wait_for_timeout(1000)
 
     def wait(self, timeout: int = 5000):
         """Wait for the specified timeout in milliseconds."""
@@ -196,7 +208,7 @@ class Browser:
         rects, items_raw = self.active_page.evaluate(js_script)
         
         # Store selectors for interaction
-        self._element_selectors = {i: item['element']['selector'] for i, item in enumerate(items_raw)}
+        self._element_selectors = [item['element']['selector'] for item in items_raw]
         
         return items_raw
 
@@ -211,6 +223,15 @@ class Browser:
         # Convert image to base64
         with open(path, 'rb') as image_file:
             return base64.b64encode(image_file.read()).decode('utf-8')
+
+    def get_state(self) -> BrowserState:
+        self.active_page.wait_for_load_state("networkidle")
+        self.active_page.wait_for_timeout(1000)
+
+        return BrowserState(
+            page_url=self.active_page.url,
+            page_screenshot_base64=f"data:image/png;base64,{self.take_screenshot_with_selectors(f"../.data/screenshots/screenshot_{time.time()}.png")}"
+        )
 
     def close(self):
         self.context.close()
