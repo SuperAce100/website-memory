@@ -1,6 +1,7 @@
 import base64
 import json
 import os
+import random
 import time
 from pydantic import BaseModel
 from playwright.sync_api import sync_playwright
@@ -13,6 +14,7 @@ class BrowserState(BaseModel):
 class Browser:
     def __init__(self):
         self.driver = sync_playwright().start().chromium.launch(headless=False)
+        
         self.context = self.driver.new_context()
         self.active_page = None
         self._element_selectors = {}  # Store element selectors for interaction
@@ -37,6 +39,8 @@ class Browser:
         if index >= len(self._element_selectors):
             raise ValueError(f"No element found with index {index}")
         self.active_page.fill(self._element_selectors[index], text)
+        self.active_page.wait_for_timeout(random.randint(200, 1000))
+        self.active_page.keyboard.press("Enter")
         self.active_page.wait_for_load_state("networkidle")
         self.active_page.wait_for_timeout(1000)
 
@@ -209,7 +213,8 @@ class Browser:
         
         # Store selectors for interaction
         self._element_selectors = [item['element']['selector'] for item in items_raw]
-        
+
+        print(items_raw)
         return items_raw
 
     def take_screenshot_with_selectors(self, path: str):
@@ -241,7 +246,7 @@ def main():
     base_path = "../.data/screenshots"
     os.makedirs(base_path, exist_ok=True)
     browser = Browser()
-    browser.open_url("https://overleaf.com/")
+    browser.open_url("https://apple.com/iphone")
     browser.take_screenshot_with_selectors(f"{base_path}/screenshot.png")
     browser.wait(1000)
     browser.scroll(1000)
@@ -249,8 +254,6 @@ def main():
     browser.wait(1000)
     browser.scroll(1000)
     browser.take_screenshot_with_selectors(f"{base_path}/screenshot.png")
-    browser.wait(1000)
-    browser.scroll(1000)
 
 if __name__ == "__main__":
     main()
