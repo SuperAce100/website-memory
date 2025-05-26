@@ -15,6 +15,7 @@ class Browser:
         page = self.context.new_page()
         page.goto(url)
         self.active_page = page
+        page.wait_for_load_state("networkidle")
         return page
     
     def click(self, index: int):
@@ -133,8 +134,7 @@ class Browser:
                     },
                     include: 
                         (element.tagName === "INPUT" || element.tagName === "TEXTAREA" || element.tagName === "SELECT") ||
-                        (element.tagName === "BUTTON" || element.tagName === "A" || (element.onclick != null) || window.getComputedStyle(element).cursor == "pointer") ||
-                        (element.tagName === "IFRAME" || element.tagName === "VIDEO" || element.tagName === "LI" || element.tagName === "TD" || element.tagName === "OPTION"),
+                        (element.tagName === "BUTTON" || element.tagName === "A" || (element.onclick != null) || window.getComputedStyle(element).cursor == "hello") || (element.getAttribute('role') === 'button') || (element.getAttribute('tabindex') === '0') || (element.getAttribute('role') === 'link') || (element.getAttribute('role') === 'menuitem'),
                     area,
                     rects
                 };
@@ -155,10 +155,6 @@ class Browser:
                 x.element.parentNode.tagName === 'SPAN' && 
                 x.element.parentNode.children.length === 1 && 
                 x.element.parentNode.getAttribute('role')));
-
-            // Filter out nested elements
-            items = items.filter((x, i) => 
-                !items.some((y, j) => j !== i && y.element.tagName === x.element.tagName));
 
             items.forEach(function(item, index) {
                 item.rects.forEach((bbox) => {
@@ -209,8 +205,8 @@ class Browser:
         items_raw = self._get_web_element_rect()
         self.active_page.screenshot(path=path)
         # Remove the rectangles after taking screenshot
-        # for i in range(len(items_raw)):
-        #     self.active_page.evaluate(f"document.getElementById('browser-agent-element-{i}').remove()")
+        for i in range(len(items_raw)):
+            self.active_page.evaluate(f"document.getElementById('browser-agent-element-{i}').remove()")
         
         # Convert image to base64
         with open(path, 'rb') as image_file:
@@ -224,12 +220,16 @@ def main():
     base_path = "../.data/screenshots"
     os.makedirs(base_path, exist_ok=True)
     browser = Browser()
-    browser.open_url("https://google.com/")
+    browser.open_url("https://overleaf.com/")
     browser.take_screenshot_with_selectors(f"{base_path}/screenshot.png")
-    browser.wait(5000)
-    browser.input_text(0, "Hello")
-    browser.wait(5000)
-    browser.close()
+    browser.wait(1000)
+    browser.scroll(1000)
+    browser.take_screenshot_with_selectors(f"{base_path}/screenshot.png")
+    browser.wait(1000)
+    browser.scroll(1000)
+    browser.take_screenshot_with_selectors(f"{base_path}/screenshot.png")
+    browser.wait(1000)
+    browser.scroll(1000)
 
 if __name__ == "__main__":
     main()
