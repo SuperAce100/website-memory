@@ -56,8 +56,8 @@ class Agent:
                 self.browser.scroll(int(action.args["amount"]))
             elif action.action == "wait":
                 self.browser.wait(int(action.args["amount"]))
-            elif action.action == "search":
-                self.browser.search(action.args["query"])
+            elif action.action == "goto":
+                self.browser.goto_url(action.args["url"])
             else:
                 raise ValueError(f"Invalid action: {action.action}")
         except Exception as e:
@@ -84,6 +84,10 @@ class Agent:
         while True:
             iteration += 1
             state = self.browser.get_state()
+            # Remove images from past messages
+            for message in all_messages:
+                if isinstance(message.get("content"), list):
+                    message["content"] = [item for item in message["content"] if item.get("type") != "image_url"]
             all_messages.append({
                 "role": "user",
                 "content": [
@@ -95,11 +99,15 @@ class Agent:
                     },
                     {
                         "type": "text",
-                        "text": f"Currently open page: {state.page_url} {'' if last_action_success else 'Last action failed, try again.'}"
+                        "text": f"Currently open page: {state.page_url} {'' if last_action_success else 'The last action didn\'t work, try something else!'}"
                     }
                 ]
             })
             response = llm_call_messages(all_messages, model="anthropic/claude-sonnet-4")
+            all_messages.append({
+                "role": "assistant",
+                "content": response
+            })
             action = self._parse_action(response)
             if action.action == "done":
                 return action.args["result"]
@@ -108,8 +116,7 @@ class Agent:
 
 def main():
     agent = Agent()
-    agent.browser.open_url("https://www.apple.com")
-    result = agent.run("Compare the specs of the iPhone 15 Pro Max and the iPhone 15 Pro")
+    result = agent.run("Go to the Apple website and find me a case for my iPhone 15 Pro Max")
     print(result)
 
 if __name__ == "__main__":

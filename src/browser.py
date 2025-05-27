@@ -16,7 +16,7 @@ class Browser:
         self.driver = sync_playwright().start().chromium.launch(headless=False)
         
         self.context = self.driver.new_context()
-        self.active_page = None
+        self.active_page = self.context.new_page()
         self._element_selectors = []  # List of (selector, click_location) tuples
 
     def open_url(self, url):
@@ -29,6 +29,7 @@ class Browser:
     def click(self, index: int):
         """Click on an element specified by its index."""
         if index >= len(self._element_selectors):
+            print(self._element_selectors)
             raise ValueError(f"No element found with index {index}")
         selector, click_location = self._element_selectors[index]
         if click_location:
@@ -43,6 +44,7 @@ class Browser:
     def input_text(self, index: int, text: str):
         """Input text into an element specified by its index."""
         if index >= len(self._element_selectors):
+            print(self._element_selectors)
             raise ValueError(f"No element found with index {index}")
         selector, _ = self._element_selectors[index]
         self.active_page.fill(selector, text)
@@ -225,7 +227,6 @@ class Browser:
         # Store selectors and click locations for interaction
         self._element_selectors = [(item['element']['selector'], item['clickLocation']) for item in items_raw]
 
-        print(items_raw)
         return items_raw
 
     def take_screenshot_with_selectors(self, path: str):
@@ -239,6 +240,12 @@ class Browser:
         # Convert image to base64
         with open(path, 'rb') as image_file:
             return base64.b64encode(image_file.read()).decode('utf-8')
+
+
+    def goto_url(self, url: str):
+        self.active_page.goto(url)
+        self.active_page.wait_for_load_state("networkidle")
+        self.active_page.wait_for_timeout(1000)
 
     def get_state(self) -> BrowserState:
         self.active_page.wait_for_load_state("networkidle")
