@@ -1,10 +1,12 @@
+import argparse
 from typing import List
 from pydantic import BaseModel
 from browser import Browser
+from models.llms import llm_call
 from models.uitars import ui_tars_call
 from rich.console import Console
 
-from ui_tars.prompt import COMPUTER_USE_DOUBAO
+from models.prompts import common_browser_system_prompt, planner_prompt
 
 
 class Action(BaseModel):
@@ -64,6 +66,9 @@ class Agent:
         elif action.startswith("finished"):
             content = action.split("content='")[1].split("'")[0]
             return Action(action="finished", args={"content": content})
+        elif action.startswith("goto_url"):
+            url = action.split("url='")[1].split("'")[0]
+            return Action(action="goto_url", args={"url": url})
         else:
             raise ValueError(f"Invalid action: {action}")
 
@@ -96,6 +101,8 @@ class Agent:
                 self.browser.wait()
             elif action.action == "finished":
                 return action.args["content"]
+            elif action.action == "goto_url":
+                self.browser.goto_url(action.args["url"])
             else:
                 raise ValueError(f"Invalid action: {action.action}")
         except Exception as e:
@@ -111,16 +118,39 @@ class Agent:
                 "content": [
                     {
                         "type": "text",
-                        "text": COMPUTER_USE_DOUBAO.format(
+                        "text": common_browser_system_prompt.format(
                             language="English", instruction=task
-                        )
-                        + "\n\n DO NOT REPEAT ACTIONS. If an action is not successful, try something else. If you've already clicked on something, don't click on it again, either try another action or do something else like typing.",
+                        ),
                     },
                 ],
             },
         ]
 
+        plan = llm_call(
+            prompt=planner_prompt.format(task=task),
+            model="openai/gpt-4.1-mini",
+        )
+
+        all_messages.append(
+            {
+                "role": "user",
+                "content": [{"type": "text", "text": plan}],
+            }
+        )
+
+        start_url = None
+        for line in plan.split("\n"):
+            if line.startswith("START_URL:"):
+                start_url = line.split("START_URL:")[1].strip()
+                self.console.print(f"[green]Starting URL:[/green] {start_url}")
+                break
+
+        if start_url:
+            self.browser.goto_url(start_url)
+
         last_action_success = True
+        all_actions = []
+        last_action = ""
         while True:
             iteration += 1
             state = self.browser.get_state()
@@ -138,7 +168,7 @@ class Agent:
                         {
                             "type": "image",
                             "url": state.page_screenshot_base64,
-                        },
+                        }
                     ],
                 }
             )
@@ -150,20 +180,34 @@ class Agent:
                 }
             )
 
-            print(response)
+            self.console.print(f"[green]Response:[/green] {response}")
+
             action = self._parse_action(action)
             if action.action == "finished":
                 return action.args["content"]
             last_action_success = self._execute_action(action)
 
+            if action == last_action:
+                return "Error: repeated action"
+
+            if last_action_success:
+                all_actions.append(action)
+            last_action = action
+
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--task", type=str, required=True)
+    args = parser.parse_args()
+    task = args.task
+    console = Console()
+    console.print(f"[green]Task:[/green] {task}")
     agent = Agent()
-    agent.browser.goto_url("https://www.apple.com")
-    result = agent.run(
-        "Go to the Apple website and find me a case for my iPhone 15 Pro Max"
-    )
-    print(result)
+    result = agent.run(task)
+    if result != "Error: repeated action":
+        console.print(f"[green]Result:[/green] {result}")
+    else:
+        console.print(f"[red]Error:[/red] {result}.")
 
 
 if __name__ == "__main__":
