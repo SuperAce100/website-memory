@@ -1,13 +1,16 @@
 from typing import List
 from pydantic import BaseModel
 from browser import Browser
-from models.prompts import common_browser_system_prompt
-from models.llms import llm_call_messages
+from models.uitars import ui_tars_call
 from rich.console import Console
+
+from ui_tars.prompt import COMPUTER_USE_DOUBAO
+
 
 class Action(BaseModel):
     action: str
     args: dict[str, str]
+
 
 class Agent:
     def __init__(self):
@@ -15,49 +18,84 @@ class Agent:
         self.console = Console()
 
     def _parse_action(self, action: str) -> Action:
-        reasoning_start = action.find("<reasoning>") + len("<reasoning>")
-        reasoning_end = action.find("</reasoning>")
-        reasoning = action[reasoning_start:reasoning_end].strip()
-        self.console.print(f"[yellow]Reasoning:[/yellow] {reasoning}")
-
-        action_type_start = action.find("<action_type>") + len("<action_type>")
-        action_type_end = action.find("</action_type>")
-        action_type = action[action_type_start:action_type_end].strip().lower()
-
-        
-        args = {}
-        current_pos = 0
-        while True:
-            arg_start = action.find('<action_argument name="', current_pos)
-            if arg_start == -1:
-                break
-                
-            name_start = arg_start + len('<action_argument name="')
-            name_end = action.find('">', name_start)
-            arg_name = action[name_start:name_end]
-            
-            value_start = name_end + len('">')
-            value_end = action.find('</action_argument>', value_start)
-            arg_value = action[value_start:value_end].strip()
-            
-            args[arg_name] = arg_value
-            current_pos = value_end + len('</action_argument>')
-        
-        self.console.print(f"[green]Action:[/green] {action_type} with args: {args}")
-        return Action(action=action_type, args=args)
+        """Parse UI-TARS action into our Action format."""
+        if action.startswith("click"):
+            # Extract x y from (x,y) format
+            coords = action.split("start_box='")[1].split("'")[0]
+            x, y = map(int, coords.strip("()").split(","))
+            return Action(action="click", args={"x": str(x), "y": str(y)})
+        elif action.startswith("left_double"):
+            coords = action.split("start_box='")[1].split("'")[0]
+            x, y = map(int, coords.strip("()").split(","))
+            return Action(action="left_double", args={"x": str(x), "y": str(y)})
+        elif action.startswith("right_single"):
+            coords = action.split("start_box='")[1].split("'")[0]
+            x, y = map(int, coords.strip("()").split(","))
+            return Action(action="right_single", args={"x": str(x), "y": str(y)})
+        elif action.startswith("drag"):
+            start_coords = action.split("start_box='")[1].split("'")[0]
+            end_coords = action.split("end_box='")[1].split("'")[0]
+            start_x, start_y = map(int, start_coords.strip("()").split(","))
+            end_x, end_y = map(int, end_coords.strip("()").split(","))
+            return Action(
+                action="drag",
+                args={
+                    "start_x": str(start_x),
+                    "start_y": str(start_y),
+                    "end_x": str(end_x),
+                    "end_y": str(end_y),
+                },
+            )
+        elif action.startswith("hotkey"):
+            key = action.split("key='")[1].split("'")[0]
+            return Action(action="hotkey", args={"key": key})
+        elif action.startswith("type"):
+            content = action.split("content='")[1].split("'")[0]
+            return Action(action="type", args={"content": content})
+        elif action.startswith("scroll"):
+            coords = action.split("start_box='")[1].split("'")[0]
+            direction = action.split("direction='")[1].split("'")[0]
+            x, y = map(int, coords.strip("()").split(","))
+            return Action(
+                action="scroll", args={"x": str(x), "y": str(y), "direction": direction}
+            )
+        elif action.startswith("wait"):
+            return Action(action="wait", args={})
+        elif action.startswith("finished"):
+            content = action.split("content='")[1].split("'")[0]
+            return Action(action="finished", args={"content": content})
+        else:
+            raise ValueError(f"Invalid action: {action}")
 
     def _execute_action(self, action: Action):
         try:
             if action.action == "click":
-                self.browser.click(int(action.args["index"]))
-            elif action.action == "input":
-                self.browser.input_text(int(action.args["index"]), action.args["text"])
+                self.browser.click(int(action.args["x"]), int(action.args["y"]))
+            elif action.action == "left_double":
+                self.browser.left_double(int(action.args["x"]), int(action.args["y"]))
+            elif action.action == "right_single":
+                self.browser.right_single(int(action.args["x"]), int(action.args["y"]))
+            elif action.action == "drag":
+                self.browser.drag(
+                    int(action.args["start_x"]),
+                    int(action.args["start_y"]),
+                    int(action.args["end_x"]),
+                    int(action.args["end_y"]),
+                )
+            elif action.action == "hotkey":
+                self.browser.hotkey(action.args["key"])
+            elif action.action == "type":
+                self.browser.type(action.args["content"])
             elif action.action == "scroll":
-                self.browser.scroll(int(action.args["amount"]))
+                self.browser.scroll(
+                    int(action.args["x"]),
+                    int(action.args["y"]),
+                    action.args["direction"],
+                )
             elif action.action == "wait":
-                self.browser.wait(int(action.args["amount"]))
-            elif action.action == "goto":
-                self.browser.goto_url(action.args["url"])
+                self.browser.wait()
+            elif action.action == "finished":
+                return action.args["content"]
             else:
                 raise ValueError(f"Invalid action: {action.action}")
         except Exception as e:
@@ -67,57 +105,66 @@ class Agent:
 
     def run(self, task: str):
         iteration = 0
-        all_messages = [{
-            "role": "system",
-            "content": common_browser_system_prompt
-        }, {
-            "role": "user",
-            "content": [
-                {
-                    "type": "text",
-                    "text": f"Your job is to complete the following task: {task}"
-                }
-            ]
-        }]
+        all_messages = [
+            {
+                "role": "system",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": COMPUTER_USE_DOUBAO.format(
+                            language="English", instruction=task
+                        )
+                        + "\n\n DO NOT REPEAT ACTIONS. If an action is not successful, try something else. If you've already clicked on something, don't click on it again, either try another action or do something else like typing.",
+                    },
+                ],
+            },
+        ]
 
         last_action_success = True
         while True:
             iteration += 1
             state = self.browser.get_state()
-            # Remove images from past messages
+
             for message in all_messages:
-                if isinstance(message.get("content"), list):
-                    message["content"] = [item for item in message["content"] if item.get("type") != "image_url"]
-            all_messages.append({
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": state.page_screenshot_base64
-                        }
-                    },
-                    {
-                        "type": "text",
-                        "text": f"Currently open page: {state.page_url} {'' if last_action_success else 'The last action didn\'t work, try something else!'}"
-                    }
-                ]
-            })
-            response = llm_call_messages(all_messages, model="anthropic/claude-sonnet-4")
-            all_messages.append({
-                "role": "assistant",
-                "content": response
-            })
-            action = self._parse_action(response)
-            if action.action == "done":
-                return action.args["result"]
+                if message["role"] == "user":
+                    message["content"] = [
+                        item for item in message["content"] if item["type"] != "image"
+                    ]
+
+            all_messages.append(
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image",
+                            "url": state.page_screenshot_base64,
+                        },
+                    ],
+                }
+            )
+            action, response = ui_tars_call(all_messages)
+            all_messages.append(
+                {
+                    "role": "assistant",
+                    "content": [{"type": "text", "text": response}],
+                }
+            )
+
+            print(response)
+            action = self._parse_action(action)
+            if action.action == "finished":
+                return action.args["content"]
             last_action_success = self._execute_action(action)
 
 
 def main():
     agent = Agent()
-    result = agent.run("Go to the Apple website and find me a case for my iPhone 15 Pro Max")
+    agent.browser.goto_url("https://www.apple.com")
+    result = agent.run(
+        "Go to the Apple website and find me a case for my iPhone 15 Pro Max"
+    )
     print(result)
+
 
 if __name__ == "__main__":
     main()

@@ -12,4 +12,9 @@ dependencies = [
     "python-dotenv>=1.1.0",
     "rich>=14.0.0",
     "tiktoken>=0.9.0",
+    "torch>=2.7.0",
+    "torchaudio>=2.7.0",
+    "torchvision>=0.22.0",
+    "transformers>=4.52.3",
+    "ui-tars>=0.1.4",
 ]
