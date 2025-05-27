@@ -15,27 +15,30 @@ class BrowserState(BaseModel):
 
 class Browser:
     def __init__(self):
-        self.driver = sync_playwright().start().chromium.launch(headless=False)
+        self.driver = (
+            sync_playwright().start().chromium.launch(headless=False, timeout=120000)
+        )
         self.context = self.driver.new_context()
         self.active_page = self.context.new_page()
+
+    def _wait_for_load_state(self):
+        # self.active_page.wait_for_load_state("networkidle")
+        self.active_page.wait_for_timeout(3000)
 
     def click(self, x: int, y: int):
         """Click at specific coordinates."""
         self.active_page.mouse.click(x, y)
-        self.active_page.wait_for_load_state("networkidle")
-        self.active_page.wait_for_timeout(1000)
+        self._wait_for_load_state()
 
     def left_double(self, x: int, y: int):
         """Double click at specific coordinates."""
         self.active_page.mouse.dblclick(x, y)
-        self.active_page.wait_for_load_state("networkidle")
-        self.active_page.wait_for_timeout(1000)
+        self._wait_for_load_state()
 
     def right_single(self, x: int, y: int):
         """Right click at specific coordinates."""
         self.active_page.mouse.click(x, y, button="right")
-        self.active_page.wait_for_load_state("networkidle")
-        self.active_page.wait_for_timeout(1000)
+        self._wait_for_load_state()
 
     def drag(self, start_x: int, start_y: int, end_x: int, end_y: int):
         """Drag from start to end coordinates."""
@@ -43,8 +46,7 @@ class Browser:
         self.active_page.mouse.down()
         self.active_page.mouse.move(end_x, end_y)
         self.active_page.mouse.up()
-        self.active_page.wait_for_load_state("networkidle")
-        self.active_page.wait_for_timeout(1000)
+        self._wait_for_load_state()
 
     def hotkey(self, key: str):
         """Press a hotkey combination."""
@@ -96,28 +98,25 @@ class Browser:
                 self.active_page.keyboard.up("Alt")
             elif k == "cmd":
                 self.active_page.keyboard.up("Meta")
-        self.active_page.wait_for_load_state("networkidle")
-        self.active_page.wait_for_timeout(1000)
+        self._wait_for_load_state()
 
     def type(self, content: str):
         """Type content with support for escape characters."""
         self.active_page.keyboard.type(content)
-        self.active_page.wait_for_load_state("networkidle")
-        self.active_page.wait_for_timeout(1000)
+        self._wait_for_load_state()
 
     def scroll(self, x: int, y: int, direction: str):
         """Scroll at specific coordinates in given direction."""
         self.active_page.mouse.move(x, y)
         if direction == "down":
-            self.active_page.mouse.wheel(0, 100)
+            self.active_page.mouse.wheel(0, 1000)
         elif direction == "up":
-            self.active_page.mouse.wheel(0, -100)
+            self.active_page.mouse.wheel(0, -1000)
         elif direction == "right":
-            self.active_page.mouse.wheel(100, 0)
+            self.active_page.mouse.wheel(1000, 0)
         elif direction == "left":
-            self.active_page.mouse.wheel(-100, 0)
-        self.active_page.wait_for_load_state("networkidle")
-        self.active_page.wait_for_timeout(1000)
+            self.active_page.mouse.wheel(-1000, 0)
+        self._wait_for_load_state()
 
     def wait(self):
         """Wait for 5 seconds."""
@@ -132,13 +131,12 @@ class Browser:
     def goto_url(self, url: str):
         """Navigate to a URL."""
         self.active_page.goto(url)
-        self.active_page.wait_for_load_state("networkidle")
-        self.active_page.wait_for_timeout(1000)
+        self.active_page.wait_for_load_state("networkidle", timeout=120000)
+        self.active_page.wait_for_timeout(6000)
 
     def get_state(self) -> BrowserState:
         """Get current browser state."""
-        self.active_page.wait_for_load_state("networkidle")
-        self.active_page.wait_for_timeout(1000)
+        self._wait_for_load_state()
 
         return BrowserState(
             page_url=self.active_page.url,

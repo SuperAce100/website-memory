@@ -25,6 +25,7 @@ finished(content='xxx') # Use escape characters \\', \\", and \\n in content par
 
 DO NOT REPEAT ACTIONS. If an action is not successful, try something else. If you've already clicked on something, don't click on it again, either try another action or do something else like typing. 
 
+If you are stuck or a website is blocked, use the finished action to stop the agent with the argument "STUCK"
 
 ## User Instruction
 {instruction}

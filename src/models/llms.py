@@ -13,6 +13,7 @@ client = OpenAI(
     base_url="https://openrouter.ai/api/v1",
 )
 
+
 def llm_call(
     prompt: str,
     system_prompt: str | None = None,
@@ -26,7 +27,7 @@ def llm_call(
         `prompt` (`str`): The user prompt to send to the LLM.
         `system_prompt` (`str`, optional): System-level instructions for the LLM. Defaults to None.
         `response_format` (`BaseModel`, optional): Pydantic model for structured responses. Defaults to None.
-        `model` (`str`, optional): Model identifier to use. Defaults to "gpt-4o-mini".
+        `model` (`str`, optional): Model identifier to use. Defaults to "openai/gpt-4.1-mini".
 
     ### Returns:
         The LLM's response, either as raw text or as a parsed object according to `response_format`.
@@ -100,6 +101,7 @@ def llm_call(
             raise ValueError(f"Failed to parse response: {e}")
 
     return client.chat.completions.create(**kwargs).choices[0].message.content
+
 
 def llm_call_messages(
     messages: list[dict[str, str]],
