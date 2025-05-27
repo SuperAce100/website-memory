@@ -48,9 +48,54 @@ class Browser:
 
     def hotkey(self, key: str):
         """Press a hotkey combination."""
+
         keys = key.lower().split()
+        # Press all modifier keys first
         for k in keys:
+            if k == "ctrl":
+                self.active_page.keyboard.down("Control")
+            elif k == "shift":
+                self.active_page.keyboard.down("Shift")
+            elif k == "alt":
+                self.active_page.keyboard.down("Alt")
+            elif k == "cmd":
+                self.active_page.keyboard.down("Meta")
+
+        # Press the main key
+        k = keys[-1]
+        if k == "enter":
+            self.active_page.keyboard.press("Enter")
+        elif k == "tab":
+            self.active_page.keyboard.press("Tab")
+        elif k == "backspace":
+            self.active_page.keyboard.press("Backspace")
+        elif k == "delete":
+            self.active_page.keyboard.press("Delete")
+        elif k == "esc":
+            self.active_page.keyboard.press("Escape")
+        elif k == "space":
+            self.active_page.keyboard.press("Space")
+        elif k == "up":
+            self.active_page.keyboard.press("ArrowUp")
+        elif k == "down":
+            self.active_page.keyboard.press("ArrowDown")
+        elif k == "left":
+            self.active_page.keyboard.press("ArrowLeft")
+        elif k == "right":
+            self.active_page.keyboard.press("ArrowRight")
+        else:
             self.active_page.keyboard.press(k)
+
+        # Release all modifier keys
+        for k in reversed(keys[:-1]):
+            if k == "ctrl":
+                self.active_page.keyboard.up("Control")
+            elif k == "shift":
+                self.active_page.keyboard.up("Shift")
+            elif k == "alt":
+                self.active_page.keyboard.up("Alt")
+            elif k == "cmd":
+                self.active_page.keyboard.up("Meta")
         self.active_page.wait_for_load_state("networkidle")
         self.active_page.wait_for_timeout(1000)
 

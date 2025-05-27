@@ -53,7 +53,7 @@ class Agent:
             content = action.split("content='")[1].split("'")[0]
             return Action(action="type", args={"content": content})
         elif action.startswith("scroll"):
-            coords = action.split("start_box='")[1].split("'")[0]
+            coords = action.split("point='")[1].split("'")[0]
             direction = action.split("direction='")[1].split("'")[0]
             x, y = map(int, coords.strip("()").split(","))
             return Action(
